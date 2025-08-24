@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "colcob",
+        "type": "shell",
+        "command": "colcon build",
+        "problemMatcher": [],
+        "group": {
+            "kind": "build",
+            "isDefault": true
+        }
+      }
+    ],
+    "inputs": [
+      {
+        "id": "myInput",
+        "type": "promptString",
+        "description": "Enter a value"
+      }
+    ]
+  }

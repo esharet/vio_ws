@@ -1,0 +1,33 @@
+{
+    "name": "vio",
+    "dockerComposeFile": [
+      "../docker-compose.yaml",
+      // "../docker-compose.jetson.yaml"
+    ],
+    "service": "dev",
+    "shutdownAction": "stopCompose",
+    "workspaceFolder": "/workspace",
+    "remoteUser": "user",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-vscode.cpptools",
+          "twxs.cmake",
+          "redhat.vscode-xml",
+          "redhat.vscode-yaml",
+          "albert.tabout",
+          "actboy168.tasks",
+          "streetsidesoftware.code-spell-checker",
+          "mhutchie.git-graph",
+          "rioj7.command-variable",
+          "dlech.chmod",
+          "mkloubert.vscode-deploy-reloaded",
+          "nonanonno.vscode-ros2",
+          "smilerobotics.urdf",
+          "JaehyunShim.vscode-ros2"
+        ],
+        "settings": {}
+      }
+    }
+  }

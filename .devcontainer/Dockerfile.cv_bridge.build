@@ -1,0 +1,58 @@
+FROM nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
+
+# Install language
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  locales \
+  && locale-gen en_US.UTF-8 \
+  && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+  && rm -rf /var/lib/apt/lists/*
+ENV LANG=en_US.UTF-8
+
+# Install timezone
+RUN ln -fs /usr/share/zoneinfo/UTC /etc/localtime \
+  && export DEBIAN_FRONTEND=noninteractive \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends tzdata \
+  && dpkg-reconfigure --frontend noninteractive tzdata \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install common programs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg2 \
+    lsb-release \
+    software-properties-common \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ROS2
+RUN sudo add-apt-repository universe \
+  && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+  && apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-ros-base \
+    python3-argcomplete \
+    ros-humble-rmw-cyclonedds-cpp \
+    ros-dev-tools \
+    python3-colcon-clean \
+    ros-humble-ament-* \
+  && rm -rf /var/lib/apt/lists/*
+# cv_bridge
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libboost-all-dev \
+    libboost-python-dev \
+    python3-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install OpenCV
+COPY opencv_debs/OpenCV*aarch64*.deb /tmp
+RUN cd /tmp && apt update && apt install -y ./OpenCV*.deb \
+  && rm -rf /tmp/OpenCV*.deb
+
+# bloom and fake
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-bloom \
+    fakeroot \
+    debhelper \
+    dh-python \
+  && rm -rf /var/lib/apt/lists/*

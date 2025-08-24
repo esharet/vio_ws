@@ -1,0 +1,14 @@
+build:
+  # Use symlink install to speed up builds
+  symlink-install: true
+  # Set build type (e.g., Release or Debug)
+  cmake-args:
+    - "-DCMAKE_BUILD_TYPE=Release"
+
+test:
+  # Run tests in parallel
+  parallel-workers: 4
+
+# Additional settings for colcon test and other commands
+test-result:
+  verbose: true
