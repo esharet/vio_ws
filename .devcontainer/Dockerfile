@@ -119,4 +119,5 @@ RUN ARCH=$(uname -m) && \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-rqt \
     ros-humble-qt-gui \
+    python3-matplotlib \
   && rm -rf /var/lib/apt/lists/*

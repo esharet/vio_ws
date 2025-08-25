@@ -23,7 +23,9 @@
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
-
+    <item>
+     <layout class="QVBoxLayout" name="layout"/>
+    </item>
     <item>
      <widget class="QPushButton" name="pushButton">
       <property name="text">
