@@ -1,3 +1,6 @@
 [submodule "submodules/vision_opencv"]
 	path = submodules/vision_opencv
 	url = https://github.com/ros-perception/vision_opencv.git
+[submodule "submodules/of_vio"]
+	path = submodules/of_vio
+	url = git@github.com:esharet/of_vio.git
