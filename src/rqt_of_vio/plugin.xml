@@ -1,0 +1,17 @@
+<library path="src">
+<class name="demo" 
+    type="rqt_of_vio.of_vio_plugin.OfVIORqtPlugin" 
+    base_class_type="rqt_gui_py::Plugin">
+    <description>
+        rqt of vio plugin
+    </description>
+    <qtgui>
+        <group>
+            <label>vio</label>
+        </group>
+        <label>optical flow vio plugin</label>
+        <icon type="theme">system-help</icon>
+        <statustip>Simple demo plugin.</statustip>
+    </qtgui>
+</class>
+</library>

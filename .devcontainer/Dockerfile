@@ -116,3 +116,7 @@ RUN ARCH=$(uname -m) && \
         echo "Unsupported architecture: $ARCH"; exit 1; \
     fi 
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-rqt \
+    ros-humble-qt-gui \
+  && rm -rf /var/lib/apt/lists/*
