@@ -8,7 +8,7 @@ from sensor_msgs.msg import Image
 import cv2
 import traceback
 import numpy as np
-from of_vio.vio import LK, LKResult
+from vio_core.optical_flow.lk import LK, LKResult
 
 TOPIC_IMAGE = "/gimbal_camera/image_raw"
 WIDTH = 640
@@ -16,7 +16,7 @@ HEIGHT = 512
 
 class VIONode(Node):
     def __init__(self):
-        node_name="vio_node"
+        node_name="optical_flow_node"
         super().__init__(node_name)
         self.bridge = CvBridge()
         self._init_subscribers()

@@ -13,7 +13,7 @@ find_package(ament_cmake_python REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
 
 set(NODES
-  vio_of/vio.py
+  optical_flow/optical_flow_node.py
 )
 
 
