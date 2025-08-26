@@ -3,3 +3,4 @@ install
 log
 opencv_debs
 c_cpp_properties.json
+__pycache__
