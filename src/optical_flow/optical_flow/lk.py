@@ -12,59 +12,11 @@ from typing import NamedTuple
 
 import matplotlib.pyplot as plt
 
-log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
-
-
-def create_test_sequence(num_frames=300,  motion_speed=3,width=640, height=480):
-    # Initial positions
-    circle_start = (150, 200)    # Circle starts at left
-    rect_start = (120, 100)      # Rectangle starts at left
-
-    # Object properties
-    circle_radius = 30
-    rect_size = (50, 50)  # width, height
-    for frame_idx in range(num_frames):
-        # Create black background
-        img = np.zeros((height, width, 3), dtype=np.uint8)
-
-        # Calculate current positions (moving right)
-        circle_x = circle_start[0] + (frame_idx * motion_speed)
-        circle_y = circle_start[1]
-
-        rect_x = rect_start[0] + (frame_idx * motion_speed)
-        rect_y = rect_start[1]
-
-        # Wrap around if objects go off screen (optional)
-        circle_x = circle_x % (width + circle_radius * 2) - circle_radius
-        rect_x = rect_x % (width + rect_size[0]) - rect_size[0]
-
-        # Draw white circle
-        if -circle_radius <= circle_x <= width + circle_radius:
-            cv2.circle(img, (int(circle_x), int(circle_y)), circle_radius, (0, 0, 255), -1)
-
-        # Draw green rectangle
-        if -rect_size[0] <= rect_x <= width:
-            cv2.rectangle(img, 
-                        (int(rect_x), int(rect_y)), 
-                        (int(rect_x + rect_size[0]), int(rect_y + rect_size[1])), 
-                        (0, 255, 0), -1)
-
-        # Draw green rectangle
-        if -rect_size[0] <= rect_x <= width:
-            rect_y2 = rect_y + 200 * np.sin(frame_idx / 10)  # Add vertical oscillation
-            cv2.rectangle(img, 
-                        (int(rect_x), int(rect_y2)), 
-                        (int(rect_x + rect_size[0]), int(rect_y2 + rect_size[1])), 
-                        (0, 255, 0), -1)
-
-
-        yield img
-
 
 class LKResult(NamedTuple):
     good_new: np.ndarray
     good_old: np.ndarray
+
 
 class LK():
     def __init__(self, w, h, logger):
@@ -151,6 +103,56 @@ class LK():
         self.gpu_prev_gray = gpu_gray.clone()
 
         return LKResult(good_new=good_new, good_old=good_old)
+
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
+
+
+def create_test_sequence(num_frames=300,  motion_speed=3,width=640, height=480):
+    # Initial positions
+    circle_start = (150, 200)    # Circle starts at left
+    rect_start = (120, 100)      # Rectangle starts at left
+
+    # Object properties
+    circle_radius = 30
+    rect_size = (50, 50)  # width, height
+    for frame_idx in range(num_frames):
+        # Create black background
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Calculate current positions (moving right)
+        circle_x = circle_start[0] + (frame_idx * motion_speed)
+        circle_y = circle_start[1]
+
+        rect_x = rect_start[0] + (frame_idx * motion_speed)
+        rect_y = rect_start[1]
+
+        # Wrap around if objects go off screen (optional)
+        circle_x = circle_x % (width + circle_radius * 2) - circle_radius
+        rect_x = rect_x % (width + rect_size[0]) - rect_size[0]
+
+        # Draw white circle
+        if -circle_radius <= circle_x <= width + circle_radius:
+            cv2.circle(img, (int(circle_x), int(circle_y)), circle_radius, (0, 0, 255), -1)
+
+        # Draw green rectangle
+        if -rect_size[0] <= rect_x <= width:
+            cv2.rectangle(img, 
+                        (int(rect_x), int(rect_y)), 
+                        (int(rect_x + rect_size[0]), int(rect_y + rect_size[1])), 
+                        (0, 255, 0), -1)
+
+        # Draw green rectangle
+        if -rect_size[0] <= rect_x <= width:
+            rect_y2 = rect_y + 200 * np.sin(frame_idx / 10)  # Add vertical oscillation
+            cv2.rectangle(img, 
+                        (int(rect_x), int(rect_y2)), 
+                        (int(rect_x + rect_size[0]), int(rect_y2 + rect_size[1])), 
+                        (0, 255, 0), -1)
+
+
+        yield img
 
 
 def plot_feature_motion_histogram(old_good_features, new_good_features):
