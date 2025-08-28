@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
-
 from dataclasses import dataclass
 import math
-import rclpy
-from rclpy.qos import qos_profile_sensor_data
-from rclpy.node import Node
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image, CameraInfo
-from mavros_msgs.msg import Altitude
 from scipy.spatial.transform import Rotation as R
-from projection import undistort_pixels, project_points_to_ground
-
 import cv2
 import traceback
 import numpy as np
-from lk import LK, LKResult
+
+import rclpy
+from rclpy.qos import qos_profile_sensor_data
+from rclpy.node import Node
+
+from cv_bridge import CvBridge
 from tf2_ros import TransformListener
 from tf2_ros.buffer import Buffer
+
+from sensor_msgs.msg import Image, CameraInfo
+from mavros_msgs.msg import Altitude
+from builtin_interfaces.msg import Time
+
+from projection import project_points_to_ground
+from lk import LK, LKResult
+
+import matplotlib.pyplot as plt
+
 
 CAMERA_IMAGE_TOPIC = "/gimbal_camera/image_raw"
 CAMERA_INFO_TOPIC = "/gimbal_camera/camera_info"
@@ -41,6 +47,7 @@ class VIONode(Node):
 
         self.camera_info_data: CameraInfoData = None
         self.camera_height: float = None
+        self.last_image_timestamp: Time = None
 
         self.bridge = CvBridge()
 
@@ -78,9 +85,6 @@ class VIONode(Node):
         cv2.imshow("LK Optical Flow CUDA", frame)
         cv2.waitKey(1)
     
-    def calc_position_diff(self):
-        pass # use the real camera height, K matrix and R matrix (transform)
-        
 
     def get_rotation_matrix(self):
         current_transform = self.tf_buffer.lookup_transform(WORLD_FRAME, CAMERA_OPTICAL_FRAME, rclpy.time.Time()) # TODO: verify transform exists
@@ -91,20 +95,24 @@ class VIONode(Node):
             current_transform.transform.rotation.w
         ]
         return R.from_quat(quat).as_matrix()
-        
-        
+
 
     def image_callback(self, msg: Image):
+        if self.last_image_timestamp is None:
+            self.get_logger().warning(f"last image timestamp is None")
+            self.last_image_timestamp = msg.header.stamp
+            return
+        if self.camera_info_data is None:
+            self.get_logger().warning(f"camera info data is None")
+            return
         if self.camera_height is None:
-            self.get_logger().warning(f"camera height is none. No {ALTITUDE_TOPIC} terrain value")
+            self.get_logger().warning(f"camera height is None. No {ALTITUDE_TOPIC} terrain value ?")
             return
         
         try:
-            # Convert to OpenCV image
+            # Convert to OpenCV image, find features and show them on cv2 window
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            # Find features
             lk_result: LKResult = self._vio.process_frame(frame)
-            # Show image using OpenCV
             self.show_features(frame, lk_result)
         except Exception as e:
             self.get_logger().error(f"Failed to process frame: {e}")
@@ -131,7 +139,20 @@ class VIONode(Node):
             R=rotation_matrix,
             camera_height=self.camera_height)
         
+        points_flow_on_ground = new_points[:, :2] - old_points[:, :2]
 
+        current_image_timestamp = msg.header.stamp
+        self.calc_estimated_velocity(points_flow_on_ground, current_image_timestamp, self.last_image_timestamp)
+        self.last_image_timestamp = current_image_timestamp
+
+
+    def ros_stamp_to_sec(self, msg: Time) -> float:
+        return float(msg.sec + msg.nanosec * 1e-9)
+    
+    def calc_estimated_velocity(self, points_flow_on_ground, current_image_timestamp, last_image_timestamp):
+        estimated_velocity = -points_flow_on_ground / (self.ros_stamp_to_sec(current_image_timestamp) - self.ros_stamp_to_sec(last_image_timestamp))
+
+        # self.get_logger().info(f"{estimated_velocity=}")
 
     def camera_info_callback(self, msg: CameraInfo):
         self.camera_info_data = CameraInfoData(
@@ -140,9 +161,11 @@ class VIONode(Node):
             )
 
     def altitude_callback(self, msg: Altitude):
-        self.get_logger().info(f"rome altitude: {msg}")
+        # TODO: make sure there is always updated height, create last_height_update variable
+        # TODO: use ahrs2 if there is no rangefinder
         if not math.isnan(msg.terrain):
             self.camera_height = msg.terrain
+
 
 
 
