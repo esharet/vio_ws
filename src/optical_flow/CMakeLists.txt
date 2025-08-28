@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(vio_of)
+project(optical_flow)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -13,7 +13,7 @@ find_package(ament_cmake_python REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
 
 set(NODES
-  vio_of/vio.py
+  optical_flow/optical_flow_node.py
 )
 
 

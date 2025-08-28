@@ -6,5 +6,5 @@
 # export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-export PYTHONPATH=$PYTHONPATH:/workspace/submodules/of_vio
+export PYTHONPATH=$PYTHONPATH:/workspace/submodules
 source aliases.sh
