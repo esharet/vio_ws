@@ -45,11 +45,10 @@ class OfVIORqtPlugin(Plugin):
         self.layout.addWidget(dynamic_canvas)
         self.layout.addWidget(velocity_y_canvas)
 
-        self._veleocity_x = dynamic_canvas.figure.subplots()
+        self._velocity_x = dynamic_canvas.figure.subplots()
         self._velocity_y = velocity_y_canvas.figure.subplots()
 
-        self._veleocity_x.set_title("X Vel")
-        self._velocity_y.set_title("Y Vel")
+        
         # Set up a Line2D.
         buffer_size = 10
         self.xdata = np.arange(buffer_size)
@@ -59,12 +58,16 @@ class OfVIORqtPlugin(Plugin):
         self.vy_estimate = deque([0]*buffer_size, maxlen=buffer_size)
         self.vy_truth = deque([0]*buffer_size, maxlen=buffer_size)
 
-        self._vx_estimate_line, = self._veleocity_x.plot(self.xdata, self.vx_estimate, label="estimate")
-        self._vx_truth_line, = self._veleocity_x.plot(self.xdata, self.vx_truth, label="truth")
+        self._vx_estimate_line, = self._velocity_x.plot(self.xdata, self.vx_estimate, label="estimate")
+        self._vx_truth_line, = self._velocity_x.plot(self.xdata, self.vx_truth, label="truth")
 
         self._vy_estimate_line, = self._velocity_y.plot(self.xdata, self.vy_estimate, label="estimate")
         self._vy_truth_line, = self._velocity_y.plot(self.xdata, self.vy_truth, label="truth")
 
+        self._velocity_x.set_title("X Vel")
+        self._velocity_y.set_title("Y Vel")
+        self._velocity_x.legend()
+        self._velocity_y.legend()
         # The below two timers must be attributes of self, so that the garbage
         # collector won't clean them after we finish with __init__...
 

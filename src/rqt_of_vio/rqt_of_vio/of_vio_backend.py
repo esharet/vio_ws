@@ -11,7 +11,7 @@ from . import Event
 
 TOPIC_ESTIMATE_VELOCITY = "xxx"
 TOPIC_MAVROS_VELOCITY = "yyy"
-TEST = False
+TEST = True
 
 def sine_generator(frequency=1.0, sample_rate=10, amplitude=10.0):
     """
