@@ -17,6 +17,7 @@ from tf2_ros.buffer import Buffer
 from sensor_msgs.msg import Image, CameraInfo
 from mavros_msgs.msg import Altitude
 from builtin_interfaces.msg import Time
+from geometry_msgs.msg import TwistStamped
 
 from projection import project_points_to_ground
 from lk import LK, LKResult
@@ -57,6 +58,12 @@ class VIONode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self._init_subscribers()
+
+        self._init_publishers()
+
+    def _init_publishers(self):
+        self.twist_pub = self.create_publisher(TwistStamped, "of_twist", 10)
+
 
     def _init_subscribers(self):
         self.camera_image_sub = self.create_subscription(Image,
@@ -142,8 +149,18 @@ class VIONode(Node):
         points_flow_on_ground = new_points[:, :2] - old_points[:, :2]
 
         current_image_timestamp = msg.header.stamp
-        self.calc_estimated_velocity(points_flow_on_ground, current_image_timestamp, self.last_image_timestamp)
+        est_vx, est_vy = self.calc_estimated_velocity(points_flow_on_ground, current_image_timestamp, self.last_image_timestamp)
         self.last_image_timestamp = current_image_timestamp
+
+        # TODO: calculate covariance
+        # TODO: dont send if velocity goes up to acceleration limit
+        msg = TwistStamped()
+        msg.header.stamp = current_image_timestamp
+        msg.header.frame_id = WORLD_FRAME
+        msg.twist.linear.x = float(est_vx)
+        msg.twist.linear.y = float(est_vy)
+        self.twist_pub.publish(msg)
+
 
 
     def ros_stamp_to_sec(self, msg: Time) -> float:
@@ -151,8 +168,8 @@ class VIONode(Node):
     
     def calc_estimated_velocity(self, points_flow_on_ground, current_image_timestamp, last_image_timestamp):
         estimated_velocity = -points_flow_on_ground / (self.ros_stamp_to_sec(current_image_timestamp) - self.ros_stamp_to_sec(last_image_timestamp))
-
-        # self.get_logger().info(f"{estimated_velocity=}")
+        self.get_logger().info(f"estimated_velocity shape {estimated_velocity.shape}")
+        return np.mean(estimated_velocity, axis=0)
 
     def camera_info_callback(self, msg: CameraInfo):
         self.camera_info_data = CameraInfoData(
