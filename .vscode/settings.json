@@ -16,6 +16,7 @@
 
     "python.analysis.extraPaths": [
         "${workspaceFolder}/submodules/of_vio",
+        "${workspaceFolder}src/rqt_of_vio",
         "${workspaceFolder}/install/**",
         "${workspaceFolder}/install/cv_bridge/local/lib/python3.10/dist-packages/",
         "/opt/ros/humble/lib/python3.10/site-packages/",

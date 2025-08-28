@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+"""
+Connect backend and view
+listen for event from backend and update the view
+"""
 from ament_index_python.packages import get_package_share_directory
 from rqt_gui_py.plugin import Plugin
 from PyQt5.QtCore import QStringListModel, Qt, QTimer, QSize
@@ -26,47 +30,81 @@ from .of_vio_backend import BackendNode
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
 import numpy as np
-import time
-
+from collections import deque
 
 class OfVIORqtPlugin(Plugin):
     def __init__(self, context):
         super().__init__(context)
         self._widget = OfVIOWidget()
         self._backend = BackendNode()
+        self._backend.start()
 
         self.layout = self._widget.layout
         dynamic_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        velocity_y_canvas = FigureCanvas(Figure(figsize=(5, 3)))
         self.layout.addWidget(dynamic_canvas)
+        self.layout.addWidget(velocity_y_canvas)
 
-        self._dynamic_ax = dynamic_canvas.figure.subplots()
-        self._dynamic_ax.set_title("Dynamic plot")
+        self._veleocity_x = dynamic_canvas.figure.subplots()
+        self._velocity_y = velocity_y_canvas.figure.subplots()
+
+        self._veleocity_x.set_title("X Vel")
+        self._velocity_y.set_title("Y Vel")
         # Set up a Line2D.
-        self.xdata = np.linspace(0, 10, 101)
-        self._update_ydata()
-        self._line, = self._dynamic_ax.plot(self.xdata, self.ydata)
+        buffer_size = 10
+        self.xdata = np.arange(buffer_size)
+        self.vx_estimate = deque([0]*buffer_size, maxlen=buffer_size)
+        self.vx_truth = deque([0]*buffer_size, maxlen=buffer_size)
+
+        self.vy_estimate = deque([0]*buffer_size, maxlen=buffer_size)
+        self.vy_truth = deque([0]*buffer_size, maxlen=buffer_size)
+
+        self._vx_estimate_line, = self._veleocity_x.plot(self.xdata, self.vx_estimate, label="estimate")
+        self._vx_truth_line, = self._veleocity_x.plot(self.xdata, self.vx_truth, label="truth")
+
+        self._vy_estimate_line, = self._velocity_y.plot(self.xdata, self.vy_estimate, label="estimate")
+        self._vy_truth_line, = self._velocity_y.plot(self.xdata, self.vy_truth, label="truth")
+
         # The below two timers must be attributes of self, so that the garbage
         # collector won't clean them after we finish with __init__...
 
         # The data retrieval may be fast as possible (Using QRunnable could be
         # even faster).
-        self.data_timer = dynamic_canvas.new_timer(1)
-        self.data_timer.add_callback(self._update_ydata)
-        self.data_timer.start()
+        # self.data_timer = dynamic_canvas.new_timer(1)
+        # self.data_timer.add_callback(self._backend.sim_estimate_velocity)
+        # self.data_timer.start()
         # Drawing at 50Hz should be fast enough for the GUI to feel smooth, and
         # not too fast for the GUI to be overloaded with events that need to be
         # processed while the GUI element is changed.
         self.drawing_timer = dynamic_canvas.new_timer(20)
         self.drawing_timer.add_callback(self._update_canvas)
         self.drawing_timer.start()
-
+        self.t = 0
+        self._backend.on_estimate_velocity += self.estimate_velocity_handler
+        self._backend.on_truth_velocity += self.truth_velocity_handler
         context.add_widget(self._widget)
         
     def _update_canvas(self):
         # update matplotlib canvas
-        self._line.set_data(self.xdata, self.ydata)
-        self._line.figure.canvas.draw_idle()
+        self._vx_estimate_line.set_ydata(self.vx_estimate)
+        self._vx_truth_line.set_ydata(self.vx_truth)
 
-    def _update_ydata(self):
-        # update the data only
-        self.ydata = np.sin(self.xdata + time.time())
+        self._vy_estimate_line.set_ydata(self.vy_estimate)
+        self._vy_truth_line.set_ydata(self.vy_truth)
+
+        self._vx_estimate_line.axes.relim()            # recompute limits
+        self._vx_estimate_line.axes.autoscale_view()   # adjust view to fit new data
+        self._vx_estimate_line.figure.canvas.draw_idle()
+
+        self._vy_estimate_line.axes.relim()            # recompute limits
+        self._vy_estimate_line.axes.autoscale_view()   # adjust view to fit new data
+        self._vy_estimate_line.figure.canvas.draw_idle()
+
+        
+    def truth_velocity_handler(self, vx, vy):
+        self.vx_truth.append(vx)
+        self.vy_truth.append(vy)
+
+    def estimate_velocity_handler(self, vx, vy):
+        self.vx_estimate.append(vx)
+        self.vy_estimate.append(vy)

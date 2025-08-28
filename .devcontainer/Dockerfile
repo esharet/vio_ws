@@ -120,4 +120,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-rqt \
     ros-humble-qt-gui \
     python3-matplotlib \
+    ros-humble-diagnostic-updater \ 
+    ros-humble-diagnostic-aggregator \
+    ros-humble-diagnostic-msgs \
+    ros-humble-diagnostic-common-diagnostics \
   && rm -rf /var/lib/apt/lists/*

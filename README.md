@@ -36,3 +36,20 @@ ros2 topic pub --once /track_request vision_msgs/msg/Detection2D "{
   results: []
 }"
 ```
+
+---
+
+```bash
+docker run -it --rm \
+--runtime=nvidia \
+nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04 \
+/bin/bash
+```
+
+```bash
+docker run -it --rm \
+--runtime=nvidia \
+-v /home/user/Download/opencv:opencv \
+nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04 \
+/bin/bash
+```

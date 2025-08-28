@@ -9,35 +9,52 @@ import cv2
 import traceback
 import numpy as np
 from of_vio.vio import LK, LKResult
+import diagnostic_msgs
+import diagnostic_updater
 
 TOPIC_IMAGE = "/gimbal_camera/image_raw"
 WIDTH = 640
 HEIGHT = 512
 
+
+class DummyTask(diagnostic_updater.DiagnosticTask):
+
+    def __init__(self):
+        diagnostic_updater.DiagnosticTask.__init__(
+            self, "Updater Derived from DiagnosticTask"
+        )
+
+    def run(self, stat):
+        stat.summary(
+            diagnostic_msgs.msg.DiagnosticStatus.WARN, "This is another silly updater."
+        )
+        stat.add("Stupidicity of this updater", "2000")
+        return stat
+
+
 class VIONode(Node):
     def __init__(self):
-        node_name="vio_node"
+        node_name = "vio_node"
         super().__init__(node_name)
         self.bridge = CvBridge()
         self._init_subscribers()
         self._vio = LK(WIDTH, HEIGHT)
-
-    
+        updater = diagnostic_updater.Updater(self)
+        self.hb_task = DummyTask()
+        updater.add(self.hb_task)
 
     def _init_subscribers(self):
-        self.sub_img = self.create_subscription(Image,
-            TOPIC_IMAGE,
-            self.img_handler,
-            qos_profile=qos_profile_sensor_data)
+        self.sub_img = self.create_subscription(
+            Image, TOPIC_IMAGE, self.img_handler, qos_profile=qos_profile_sensor_data
+        )
 
-    
-    #region subscribers handler
+    # region subscribers handler
     def img_handler(self, msg: Image):
-        COLOR_NEW = (0, 0, 255) # RED
-        COLOR_OLD = (255, 0, 0) # BLUE
+        COLOR_NEW = (0, 0, 255)  # RED
+        COLOR_OLD = (255, 0, 0)  # BLUE
         try:
             # Convert to OpenCV image
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
             # Show image using OpenCV
             good_new, good_old = self._vio.process_frame(frame)
@@ -53,9 +70,13 @@ class VIONode(Node):
             cv2.waitKey(1)
 
         except Exception as e:
-            self.get_logger().error(f'Failed to convert image: {e}\n\n---\n{traceback.format_exc()}')
+            self.get_logger().error(
+                f"Failed to convert image: {e}\n\n---\n{traceback.format_exc()}"
+            )
             exit()
-    #end region subscribers handler
+
+    # end region subscribers handler
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -64,5 +85,6 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
