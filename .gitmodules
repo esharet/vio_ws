@@ -1,3 +1,0 @@
-[submodule "submodules/vio_core"]
-	path = submodules/vio_core
-	url = git@github.com:esharet/vio_core.git
