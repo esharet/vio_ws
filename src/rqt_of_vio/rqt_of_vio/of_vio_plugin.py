@@ -50,7 +50,7 @@ class OfVIORqtPlugin(Plugin):
 
         
         # Set up a Line2D.
-        buffer_size = 10
+        buffer_size = 200
         self.xdata = np.arange(buffer_size)
         self.vx_estimate = deque([0]*buffer_size, maxlen=buffer_size)
         self.vx_truth = deque([0]*buffer_size, maxlen=buffer_size)

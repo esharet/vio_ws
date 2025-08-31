@@ -2,16 +2,18 @@ import os
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import TwistStamped
+from nav_msgs.msg import Odometry
 from rcl_interfaces.srv import GetParameters
 from rclpy.clock import Clock
 import pathlib
 import numpy as np
 from threading import Thread
 from . import Event
+from rclpy.qos import qos_profile_sensor_data
 
-TOPIC_ESTIMATE_VELOCITY = "xxx"
-TOPIC_MAVROS_VELOCITY = "yyy"
-TEST = True
+TOPIC_ESTIMATE_VELOCITY = "/of_twist"
+TOPIC_MAVROS_VELOCITY = "/mavros/local_position/odom"
+TEST = False
 
 def sine_generator(frequency=1.0, sample_rate=10, amplitude=10.0):
     """
@@ -43,7 +45,7 @@ class BackendNode(Node):
         self.on_truth_velocity = Event()
 
         self.create_subscription(TwistStamped, TOPIC_ESTIMATE_VELOCITY, self.__estimate_velocity_handler, 10)
-        self.create_subscription(TwistStamped, TOPIC_MAVROS_VELOCITY, self.__mavros_velocity_handler, 10)
+        self.create_subscription(Odometry, TOPIC_MAVROS_VELOCITY, self.__mavros_velocity_handler, qos_profile_sensor_data)
 
         if TEST:
             self.test_pub = self.create_publisher(TwistStamped, TOPIC_ESTIMATE_VELOCITY, 10)
@@ -54,15 +56,17 @@ class BackendNode(Node):
             self.timer = self.create_timer(1.0, self.sim_estimate_velocity)
 
     #region handlers
-    def __mavros_velocity_handler(self, msg: TwistStamped):
-        x = msg.twist.linear.x
-        y = msg.twist.linear.y
+    def __mavros_velocity_handler(self, msg: Odometry):
+        x = msg.twist.twist.linear.x
+        y = msg.twist.twist.linear.y
         self.on_truth_velocity.fire(x, y)
+        self.get_logger().info("odometry message")
 
     def __estimate_velocity_handler(self, msg: TwistStamped):
         x = msg.twist.linear.x
         y = msg.twist.linear.y
         self.on_estimate_velocity.fire(x, y)
+        self.get_logger().info("optical flow answer message")
 
     def sim_estimate_velocity(self):
         msg = TwistStamped()
