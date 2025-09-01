@@ -70,11 +70,13 @@ class LK():
 
         if self.p0_gpu.empty():
             self.p0_gpu = self.gpu_detector.detect(gpu_gray)
+            self.count = 1
             if self.p0_gpu.empty():
                 raise RuntimeError("No features detected.")
 
-            self.logger.info(f"---- Initial points detected: {self.p0_gpu.size()}")
+            self.logger.info(f"New frame start process, initial features amount: {self.p0_gpu.size()}")
             self.gpu_prev_gray = gpu_gray.clone()
+            return None
 
         # Calculate optical flow
         p1_gpu, status_gpu, error_gpu = self.lk.calc(
@@ -88,6 +90,7 @@ class LK():
         p1 = p1_gpu.download().reshape(-1, 2)
         status = status_gpu.download().reshape(-1).astype(bool)
         error = error_gpu.download().reshape(-1)
+        # TODO: use error to get the best features
 
         good_new: np.ndarray = p1[status]
         good_old: np.ndarray = p0[status]
@@ -95,10 +98,10 @@ class LK():
         # upload new point back to gpu for the next iteration
         if len(good_new) > self.minmun_points_to_redetect:
             self.p0_gpu.upload(good_new.reshape(1, -1, 2).astype(np.float32))
+            self.count += 1
         else:
-            self.logger.warning("No points to track, re-detecting.")
+            self.logger.info(f"No points to track, re-detecting. last process follow on {self.count} frames")
             self.p0_gpu = cv2.cuda.GpuMat()
-
 
         self.gpu_prev_gray = gpu_gray.clone()
 
