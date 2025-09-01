@@ -13,6 +13,7 @@ from rclpy.node import Node
 from cv_bridge import CvBridge
 from tf2_ros import TransformListener
 from tf2_ros.buffer import Buffer
+from tf2_ros import TransformException
 
 from sensor_msgs.msg import Image, CameraInfo
 from mavros_msgs.msg import Altitude
@@ -34,6 +35,13 @@ CAMERA_OPTICAL_FRAME = "camera_optical"
 
 IMAGE_WIDTH = 640
 IMAGE_HEIGHT = 512
+
+MAX_TIME_DIFF = 0.5
+MIN_TIME_DIFF = 0.05
+
+VELOCITY_SIZE_LIMIT = 30
+
+VELOCITY_DEADZONE = 0.05
 
 @dataclass
 class CameraInfoData:
@@ -81,8 +89,7 @@ class VIONode(Node):
             ALTITUDE_TOPIC,
             self.altitude_callback,
             qos_profile=qos_profile_sensor_data)
-        
-
+    
     def show_features(self, frame, lk_result: LKResult):
         COLOR_NEW = (0, 0, 255) # RED
         COLOR_OLD = (255, 0, 0) # BLUE
@@ -95,6 +102,14 @@ class VIONode(Node):
         cv2.imshow("LK Optical Flow CUDA", frame)
         cv2.waitKey(1)
     
+    def is_all_inputs_valid(self) -> bool: 
+        if self.camera_info_data is None:
+            self.get_logger().warning(f"camera info data is None")
+            return False
+        if self.camera_height is None:
+            self.get_logger().warning(f"camera height is None. No {ALTITUDE_TOPIC} terrain value ?")
+            return False
+        return True
 
     def get_rotation_matrix(self):
         current_transform = self.tf_buffer.lookup_transform(WORLD_FRAME, CAMERA_OPTICAL_FRAME, rclpy.time.Time()) # TODO: verify transform exists
@@ -106,36 +121,28 @@ class VIONode(Node):
         ]
         return R.from_quat(quat).as_matrix()
 
-
-    def image_callback(self, msg: Image):
-        # self.get_logger().info(f"New image stamp: {msg.header.stamp}")
+    def check_time_stamps(self, current_image_timestamp: Time):
         if self.last_image_timestamp is None:
             self.get_logger().warning(f"last image timestamp is None")
-            self.last_image_timestamp = msg.header.stamp
-            return
-        if self.camera_info_data is None:
-            self.get_logger().warning(f"camera info data is None")
-            return
-        if self.camera_height is None:
-            self.get_logger().warning(f"camera height is None. No {ALTITUDE_TOPIC} terrain value ?")
-            return
+            self.last_image_timestamp = current_image_timestamp
+            return False, 0
         
-        try:
-            # Convert to OpenCV image, find features and show them on cv2 window
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            lk_result: LKResult = self._vio.process_frame(frame)
-            self.show_features(frame, lk_result)
-        except Exception as e:
-            self.get_logger().error(f"Failed to process frame: {e}")
-            return
+        time_diff = self.ros_stamp_to_sec(current_image_timestamp) - self.ros_stamp_to_sec(self.last_image_timestamp)
+        self.last_image_timestamp = current_image_timestamp
+
+        if time_diff > MAX_TIME_DIFF:
+            self.get_logger().warning(f"low frame rate, time diff is bigger then max: {time_diff} > {MAX_TIME_DIFF}")
+            return False, 0
+        elif time_diff < MIN_TIME_DIFF:
+            self.get_logger().error(f"too close frames, time diff is lower then min: {time_diff} < {MIN_TIME_DIFF}")
+            return False, 0
         
-        try:
-            rotation_matrix = self.get_rotation_matrix()
-        except Exception as e:
-            self.get_logger().error(f"Failed to lookup transform: {e}")
-            return
-        
-        
+        return True, time_diff
+
+    def ros_stamp_to_sec(self, msg: Time) -> float:
+        return float(msg.sec + msg.nanosec * 1e-9)
+    
+    def calc_estimated_velocity(self, lk_result, rotation_matrix, time_diff):
         old_points: np.ndarray = project_points_to_ground(
             features=lk_result.good_old,
             K=self.camera_info_data.K,
@@ -151,22 +158,71 @@ class VIONode(Node):
             camera_height=self.camera_height)
         
         points_flow_on_ground = new_points[:, :2] - old_points[:, :2]
+        
+        med = np.median(points_flow_on_ground, axis=0)
+        std = np.std(points_flow_on_ground, axis=0)
 
+        std_thresh = 1.8
+        lower = med - std_thresh * std
+        upper = med + std_thresh * std
+        inlier_mask = np.all((points_flow_on_ground >= lower) & (points_flow_on_ground <= upper), axis=1)
+        
+        if np.sum(inlier_mask) == 0:
+            mean_flow_on_ground = med  # fallback
+        else:
+            mean_flow_on_ground = np.mean(points_flow_on_ground[inlier_mask], axis=0)
+
+        estimated_velocity = -mean_flow_on_ground / time_diff
+        return estimated_velocity
+
+    def image_callback(self, msg: Image):
+        # Make sure there are camera info and updated camera height
+        if not self.is_all_inputs_valid():
+            return
+        
+        try:
+            # Convert to OpenCV image and find features
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            lk_result: LKResult = self._vio.process_frame(frame)
+            # Calculate the rotation matrix using TF2
+            rotation_matrix = self.get_rotation_matrix()
+        except TransformException as e:
+            self.get_logger().error(f"Failed to lookup transform: {e}")
+            lk_result = None
+        except Exception as e:
+            self.get_logger().error(f"Failed to process frame: {e}")
+            lk_result = None
+        finally:
+            # exit if no lk result, and show them on cv2 window if exists
+            if lk_result is None:
+                return
+            self.show_features(frame, lk_result)
+        
+        # Check time difference is in the valid range
         current_image_timestamp = msg.header.stamp
-        est_vx, est_vy = self.calc_estimated_velocity(points_flow_on_ground, current_image_timestamp, self.last_image_timestamp)
-        self.last_image_timestamp = current_image_timestamp
+        time_valid, time_diff = self.check_time_stamps(current_image_timestamp)
+        if not time_valid:
+            return
+        
+        # Use the LK optical flow, then find the ground points, filter them, and calculate average velocity
+        est_vx, est_vy = self.calc_estimated_velocity(lk_result, rotation_matrix, time_diff)
+        
+        # filter large noise in velocity estimation
+        velocity_size = np.linalg.norm([est_vx, est_vy])
+        if velocity_size > VELOCITY_SIZE_LIMIT:
+            self.get_logger().warning(f"velocity size is bigger then max: {velocity_size} > {VELOCITY_SIZE_LIMIT}")
+            return
+        elif velocity_size < VELOCITY_DEADZONE:
+            est_vx = 0
+            est_vy = 0
 
-        filtered_vx, filtered_vy = self.kf.update([est_vx, est_vy])
+        # Send optical flow answer as TwistStamped message
+        self.pub_est_vel(current_image_timestamp, est_vx, est_vy)
+        self.pub_filtered_est_vel(current_image_timestamp, est_vx, est_vy)
 
-        msg = TwistStamped()
-        msg.header.stamp = current_image_timestamp
-        msg.header.frame_id = WORLD_FRAME
-        msg.twist.linear.x = float(filtered_vx)
-        msg.twist.linear.y = float(filtered_vy)
-        self.twist_filtered_pub.publish(msg)
 
-        # TODO: calculate covariance
-        # TODO: dont send if velocity goes up to acceleration limit
+    def pub_est_vel(self, current_image_timestamp, est_vx, est_vy):
+        # TODO: calculate covariance and use TwistWithCovarianceStamped
         msg = TwistStamped()
         msg.header.stamp = current_image_timestamp
         msg.header.frame_id = WORLD_FRAME
@@ -174,17 +230,15 @@ class VIONode(Node):
         msg.twist.linear.y = float(est_vy)
         self.twist_pub.publish(msg)
 
+    def pub_filtered_est_vel(self, current_image_timestamp, est_vx, est_vy):
+        filtered_vx, filtered_vy = self.kf.update([est_vx, est_vy])
+        msg = TwistStamped()
+        msg.header.stamp = current_image_timestamp
+        msg.header.frame_id = WORLD_FRAME
+        msg.twist.linear.x = float(filtered_vx)
+        msg.twist.linear.y = float(filtered_vy)
+        self.twist_filtered_pub.publish(msg)
 
-
-    def ros_stamp_to_sec(self, msg: Time) -> float:
-        return float(msg.sec + msg.nanosec * 1e-9)
-    
-    def calc_estimated_velocity(self, points_flow_on_ground, current_image_timestamp, last_image_timestamp):
-        time_diff = self.ros_stamp_to_sec(current_image_timestamp) - self.ros_stamp_to_sec(last_image_timestamp)
-        self.get_logger().info(f"time diff: {time_diff}")
-        estimated_velocity = -points_flow_on_ground / time_diff
-        self.get_logger().info(f"estimated_velocity shape {estimated_velocity.shape}")
-        return np.mean(estimated_velocity, axis=0)
 
     def camera_info_callback(self, msg: CameraInfo):
         self.camera_info_data = CameraInfoData(
