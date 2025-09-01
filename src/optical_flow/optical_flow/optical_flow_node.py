@@ -20,7 +20,7 @@ from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TwistStamped
 
 from projection import project_points_to_ground
-from lk import LK, LKResult
+from lk import LK, LKResult, VelocityKalmanFilter2D
 
 import matplotlib.pyplot as plt
 
@@ -57,12 +57,15 @@ class VIONode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
+        self.kf = VelocityKalmanFilter2D()
+
         self._init_subscribers()
 
         self._init_publishers()
 
     def _init_publishers(self):
         self.twist_pub = self.create_publisher(TwistStamped, "of_twist", 10)
+        self.twist_filtered_pub = self.create_publisher(TwistStamped, "of_twist_filtered", 10)
 
 
     def _init_subscribers(self):
@@ -105,6 +108,7 @@ class VIONode(Node):
 
 
     def image_callback(self, msg: Image):
+        # self.get_logger().info(f"New image stamp: {msg.header.stamp}")
         if self.last_image_timestamp is None:
             self.get_logger().warning(f"last image timestamp is None")
             self.last_image_timestamp = msg.header.stamp
@@ -152,6 +156,15 @@ class VIONode(Node):
         est_vx, est_vy = self.calc_estimated_velocity(points_flow_on_ground, current_image_timestamp, self.last_image_timestamp)
         self.last_image_timestamp = current_image_timestamp
 
+        filtered_vx, filtered_vy = self.kf.update([est_vx, est_vy])
+
+        msg = TwistStamped()
+        msg.header.stamp = current_image_timestamp
+        msg.header.frame_id = WORLD_FRAME
+        msg.twist.linear.x = float(filtered_vx)
+        msg.twist.linear.y = float(filtered_vy)
+        self.twist_filtered_pub.publish(msg)
+
         # TODO: calculate covariance
         # TODO: dont send if velocity goes up to acceleration limit
         msg = TwistStamped()
@@ -167,7 +180,9 @@ class VIONode(Node):
         return float(msg.sec + msg.nanosec * 1e-9)
     
     def calc_estimated_velocity(self, points_flow_on_ground, current_image_timestamp, last_image_timestamp):
-        estimated_velocity = -points_flow_on_ground / (self.ros_stamp_to_sec(current_image_timestamp) - self.ros_stamp_to_sec(last_image_timestamp))
+        time_diff = self.ros_stamp_to_sec(current_image_timestamp) - self.ros_stamp_to_sec(last_image_timestamp)
+        self.get_logger().info(f"time diff: {time_diff}")
+        estimated_velocity = -points_flow_on_ground / time_diff
         self.get_logger().info(f"estimated_velocity shape {estimated_velocity.shape}")
         return np.mean(estimated_velocity, axis=0)
 

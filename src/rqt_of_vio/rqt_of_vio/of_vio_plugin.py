@@ -53,15 +53,20 @@ class OfVIORqtPlugin(Plugin):
         buffer_size = 200
         self.xdata = np.arange(buffer_size)
         self.vx_estimate = deque([0]*buffer_size, maxlen=buffer_size)
+        self.vx_estimate_filtered = deque([0]*buffer_size, maxlen=buffer_size)
         self.vx_truth = deque([0]*buffer_size, maxlen=buffer_size)
 
         self.vy_estimate = deque([0]*buffer_size, maxlen=buffer_size)
+        self.vy_estimate_filtered = deque([0]*buffer_size, maxlen=buffer_size)
         self.vy_truth = deque([0]*buffer_size, maxlen=buffer_size)
 
         self._vx_estimate_line, = self._velocity_x.plot(self.xdata, self.vx_estimate, label="estimate")
+        self._vx_estimate_filtered_line, = self._velocity_x.plot(self.xdata, self.vx_estimate_filtered, label="estimate_filtered")
         self._vx_truth_line, = self._velocity_x.plot(self.xdata, self.vx_truth, label="truth")
+        
 
         self._vy_estimate_line, = self._velocity_y.plot(self.xdata, self.vy_estimate, label="estimate")
+        self._vy_estimate_filtered_line, = self._velocity_y.plot(self.xdata, self.vy_estimate_filtered, label="estimate_filtered")
         self._vy_truth_line, = self._velocity_y.plot(self.xdata, self.vy_truth, label="truth")
 
         self._velocity_x.set_title("X Vel")
@@ -84,15 +89,18 @@ class OfVIORqtPlugin(Plugin):
         self.drawing_timer.start()
         self.t = 0
         self._backend.on_estimate_velocity += self.estimate_velocity_handler
+        self._backend.on_estimate_velocity_filtered += self.__estimate_velocity_filtered_handler
         self._backend.on_truth_velocity += self.truth_velocity_handler
         context.add_widget(self._widget)
         
     def _update_canvas(self):
         # update matplotlib canvas
         self._vx_estimate_line.set_ydata(self.vx_estimate)
+        self._vx_estimate_filtered_line.set_ydata(self.vx_estimate_filtered)
         self._vx_truth_line.set_ydata(self.vx_truth)
 
         self._vy_estimate_line.set_ydata(self.vy_estimate)
+        self._vy_estimate_filtered_line.set_ydata(self.vy_estimate_filtered)
         self._vy_truth_line.set_ydata(self.vy_truth)
 
         self._vx_estimate_line.axes.relim()            # recompute limits
@@ -111,3 +119,8 @@ class OfVIORqtPlugin(Plugin):
     def estimate_velocity_handler(self, vx, vy):
         self.vx_estimate.append(vx)
         self.vy_estimate.append(vy)
+    
+    def __estimate_velocity_filtered_handler(self, vx, vy):
+        self.vx_estimate_filtered.append(vx)
+        self.vy_estimate_filtered.append(vy)
+    

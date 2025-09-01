@@ -12,7 +12,8 @@ from . import Event
 from rclpy.qos import qos_profile_sensor_data
 
 TOPIC_ESTIMATE_VELOCITY = "/of_twist"
-TOPIC_MAVROS_VELOCITY = "/mavros/local_position/odom"
+TOPIC_ESTIMATE_VELOCITY_FILTERED = "/of_twist_filtered"
+TOPIC_MAVROS_VELOCITY = "/mavros/global_position/local"
 TEST = False
 
 def sine_generator(frequency=1.0, sample_rate=10, amplitude=10.0):
@@ -43,8 +44,10 @@ class BackendNode(Node):
 
         self.on_estimate_velocity = Event()
         self.on_truth_velocity = Event()
+        self.on_estimate_velocity_filtered = Event()
 
         self.create_subscription(TwistStamped, TOPIC_ESTIMATE_VELOCITY, self.__estimate_velocity_handler, 10)
+        self.create_subscription(TwistStamped, TOPIC_ESTIMATE_VELOCITY_FILTERED, self.__estimate_velocity_filtered_handler, 10)
         self.create_subscription(Odometry, TOPIC_MAVROS_VELOCITY, self.__mavros_velocity_handler, qos_profile_sensor_data)
 
         if TEST:
@@ -66,6 +69,12 @@ class BackendNode(Node):
         x = msg.twist.linear.x
         y = msg.twist.linear.y
         self.on_estimate_velocity.fire(x, y)
+        self.get_logger().info("optical flow answer message")
+    
+    def __estimate_velocity_filtered_handler(self, msg: TwistStamped):
+        x = msg.twist.linear.x
+        y = msg.twist.linear.y
+        self.on_estimate_velocity_filtered.fire(x, y)
         self.get_logger().info("optical flow answer message")
 
     def sim_estimate_velocity(self):

@@ -105,6 +105,36 @@ class LK():
         return LKResult(good_new=good_new, good_old=good_old)
 
 
+class VelocityKalmanFilter2D:
+    def __init__(self, process_var=0.01, meas_var=0.1):
+        """
+        process_var: variance of velocity change (process noise)
+        meas_var: variance of measurements (measurement noise)
+        """
+        self.x = np.zeros(2)  # initial state [vx, vy]
+        self.P = np.eye(2)    # initial covariance
+        self.Q = np.eye(2) * process_var
+        self.R = np.eye(2) * meas_var
+
+    def update(self, z):
+        """
+        z: measurement [vx, vy]
+        returns: filtered velocity
+        """
+        # Predict
+        x_pred = self.x
+        P_pred = self.P + self.Q
+
+        # Kalman gain
+        K = P_pred @ np.linalg.inv(P_pred + self.R)
+
+        # Update
+        self.x = x_pred + K @ (z - x_pred)
+        self.P = (np.eye(2) - K) @ P_pred
+
+        return self.x
+
+
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
