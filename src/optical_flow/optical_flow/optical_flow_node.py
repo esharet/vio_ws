@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 
 
 CAMERA_IMAGE_TOPIC = "/gimbal_camera/image_raw"
+# CAMERA_IMAGE_TOPIC = "/camera/image_ae"
 CAMERA_INFO_TOPIC = "/gimbal_camera/camera_info"
 ALTITUDE_TOPIC = "/rome/altitude"
 
@@ -159,27 +160,52 @@ class VIONode(Node):
         
         points_flow_on_ground = new_points[:, :2] - old_points[:, :2]
         
-        med = np.median(points_flow_on_ground, axis=0)
-        std = np.std(points_flow_on_ground, axis=0)
+        # # 1. Calculate median, and filter by 1.8 STD around mean
+        # med = np.median(points_flow_on_ground, axis=0)
+        # std = np.std(points_flow_on_ground, axis=0)
 
-        std_thresh = 1.8
-        lower = med - std_thresh * std
-        upper = med + std_thresh * std
-        inlier_mask = np.all((points_flow_on_ground >= lower) & (points_flow_on_ground <= upper), axis=1)
+        # std_thresh = 1.8
+        # lower = med - std_thresh * std
+        # upper = med + std_thresh * std
+        # inlier_mask = np.all((points_flow_on_ground >= lower) & (points_flow_on_ground <= upper), axis=1)
         
-        if np.sum(inlier_mask) == 0:
-            mean_flow_on_ground = med  # fallback
-        else:
-            mean_flow_on_ground = np.mean(points_flow_on_ground[inlier_mask], axis=0)
+        # if np.sum(inlier_mask) == 0:
+        #     mean_flow_on_ground = med  # fallback
+        # else:
+        #     mean_flow_on_ground = np.mean(points_flow_on_ground[inlier_mask], axis=0)
+
+        # 2. Calculate histogram. and filter by 1.8 STD around peack
+        self.get_logger().info(f"points_flow_on_ground shape {points_flow_on_ground.shape}")
+        self.get_logger().info(f"{points_flow_on_ground=}")
+        filtered_velocities = []
+        std_thresh = 2.5
+        for i in range(2):
+            comp = points_flow_on_ground[:, i]
+            hist, bin_edges = np.histogram(comp, bins=15)
+            max_bin_idx = np.argmax(hist)
+            bin_start = bin_edges[max_bin_idx]
+            bin_end   = bin_edges[max_bin_idx + 1]
+
+            values_in_bin = comp[(comp >= bin_start) & (comp < bin_end)]
+
+            mean_val = np.mean(values_in_bin)
+            std_val  = np.std(values_in_bin)
+
+            mask = (comp >= mean_val - std_thresh * std_val) & (comp <= mean_val + std_thresh * std_val)
+            filtered_velocities.append(mask)
+            
+        combined_mask = filtered_velocities[0] & filtered_velocities[1]
+        mean_flow_on_ground = points_flow_on_ground[combined_mask]
+        self.get_logger().info(f"mean_flow_on_ground shape {mean_flow_on_ground.shape}")
 
         estimated_velocity = -mean_flow_on_ground / time_diff
-        return estimated_velocity
+        return estimated_velocity[0], estimated_velocity[1]
 
     def image_callback(self, msg: Image):
         # Make sure there are camera info and updated camera height
         if not self.is_all_inputs_valid():
             return
-        
+
         try:
             # Convert to OpenCV image and find features
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -202,6 +228,7 @@ class VIONode(Node):
         current_image_timestamp = msg.header.stamp
         time_valid, time_diff = self.check_time_stamps(current_image_timestamp)
         if not time_valid:
+            self.get_logger().warning(f"time diff not valid")
             return
         
         # Use the LK optical flow, then find the ground points, filter them, and calculate average velocity
