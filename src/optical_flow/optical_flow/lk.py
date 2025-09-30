@@ -51,7 +51,7 @@ class LK():
         self.p0_gpu = cv2.cuda.GpuMat()
         """ hold previous points as GpuMat """
 
-        self.minmun_points_to_redetect = 80
+        self.minmun_points_to_redetect = 40
 
     def process_frame(self, frame: np.ndarray) -> LKResult:
         """
@@ -90,7 +90,6 @@ class LK():
         p1 = p1_gpu.download().reshape(-1, 2)
         status = status_gpu.download().reshape(-1).astype(bool)
         error = error_gpu.download().reshape(-1)
-        # TODO: use error to get the best features
 
         good_new: np.ndarray = p1[status]
         good_old: np.ndarray = p0[status]
@@ -102,6 +101,7 @@ class LK():
         else:
             self.logger.info(f"No points to track, re-detecting. last process follow on {self.count} frames")
             self.p0_gpu = cv2.cuda.GpuMat()
+            return None
 
         self.gpu_prev_gray = gpu_gray.clone()
 
