@@ -14,6 +14,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 set(NODES
   optical_flow/optical_flow_node.py
+  optical_flow/altitude_manager.py
 )
 
 
