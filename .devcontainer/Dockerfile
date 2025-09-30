@@ -125,3 +125,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-diagnostic-msgs \
     ros-humble-diagnostic-common-diagnostics \
   && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-mavros-msgs \
+    ros-humble-rmw-fastrtps-cpp \
+    && rm -rf /var/lib/apt/lists/*
